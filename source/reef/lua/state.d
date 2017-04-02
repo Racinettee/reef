@@ -31,26 +31,35 @@ class State
   }
   @safe ~this()
   {
-    if(is_owner)
+    if(is_owner && !(state is null))
       (() @trusted => lua_close(state))();
   }
-  @trusted void doFile(string file)
+  /**
+   * Load a file for execution
+   * Params:
+   * file, non null string
+   */
+  @safe void doFile(string file)
   {
-    if(luaL_dofile(state, toStringz(file)) != 0)
+    if(file is null)
+      throw new StateException("Cannot pass null to doFile");
+    if((() @trusted => luaL_dofile(state, toStringz(file)))() != 0)
       printError(this);
   }
-  @trusted void doString(string line)
+  @safe void doString(string line)
   {
-    if(luaL_dostring(state, toStringz(line)) != 0)
+    if(line is null)
+      throw new StateException("Cannot pass null to doString");
+    if((() @trusted => luaL_dostring(state, toStringz(line)))() != 0)
       printError(this);
   }
-  @trusted void openLibs()
+  @safe void openLibs()
   {
-    luaL_openlibs(state);
+    (() @trusted => luaL_openlibs(state))();
   }
-  @trusted void require(const string filename)
+  @safe void require(string filename)
   {
-    if(requireFile(state, toStringz(filename)) != 0)
+    if(requireFile(this, filename) != 0)
       throw new Exception("Lua related exception");
   }
   @trusted void registerClass(T)()
@@ -61,43 +70,65 @@ class State
   {
     pushValue!T(state, value);
   }
+  @safe void pop(int index)
+  {
+    (() @trusted => lua_pop(state, index))();
+  }
   @safe void setGlobal(string name)
   {
-    reef.lua.stack.setGlobal(state, name);
+    if(!(name is null))
+      (() @trusted => lua_setglobal(state, toStringz(name)))();
+    else
+      throw new StateException("Lua state or name for global to be set were null");
   }
   @safe void getGlobal(string name)
   {
-    reef.lua.stack.getGlobal(state, name);
+    if(!(name is null))
+      (() @trusted => lua_getglobal(state, toStringz(name)))();
+    else
+      throw new StateException("Lua state or name for global to get were null");
+  }
+  @safe bool isNil(int index)
+  {
+    return (() @trusted => cast(bool)lua_isnil(state, index))();
   }
   @property
   @safe lua_State* state()
   {
-    if(luastate)
-      return luastate;
-    throw new Exception("lua state is null");
+    return luastate;
   }
   private lua_State* luastate;
   bool is_owner;
 }
 
 import std.stdio : writeln;
-package @trusted void printError(State state)
+package @safe void printError(State state)
 {
-  writeln(fromStringz(lua_tostring(state.state, -1)));
+  writeln((() @trusted => fromStringz(luaL_checkstring(state.state, -1)))());
+  state.pop(1);
 }
-private:
-int requireFile (lua_State *L, const char *name) {
-  lua_getglobal(L, "require");
-  lua_pushstring(L, name);
-  return report(L, lua_pcall(L, 1, 1, 0));
+private @safe int requireFile (State state, string name) {
+  state.getGlobal("require");
+  state.push(name);
+  return report(state, (() @trusted => lua_pcall(state.state, 1, 1, 0))());
 }
-int report(lua_State* L, int status)
+private @safe int report(State state, int status)
 {
-	if (status && !lua_isnil(L, -1)) {
-    string msg = cast(string)fromStringz(lua_tostring(L, -1));
-    if (msg == null) msg = "(error object is not a string)";
-		writeln(msg);
-		lua_pop(L, 1);
-	}
+	if(status != 0 && !state.isNil(-1))
+    printError(state);
 	return status;
+}
+
+unittest
+{
+  import std.exception;
+  assertThrown!StateException(new State(cast(lua_State*)null), "State object with null lua_State* should have failed");
+  assertThrown!StateException(new State(cast(State)null), "State object with null State should have failed");
+  auto state = new State();
+  assert(!(state.state is null), "state.state should not be null");
+  assertThrown!StateException(state.setGlobal(null), "setGlobal should have thrown because null passed to arg 0");
+  assertThrown!StateException(state.getGlobal(null), "getGlobal should have thrown because null passed to arg 0");
+  assertNotThrown!StateException(state.getGlobal("barry"), "getGlobal shouldn't have thrown when trying to get non existant global: barry");
+  assert(state.isNil(-1), "The top of the stack should have been nil after trying to get non existant global");
+  state.pop(1);
 }

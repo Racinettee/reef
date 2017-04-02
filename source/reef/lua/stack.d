@@ -9,6 +9,7 @@ import core.memory;
 
 import reef.lua.exception;
 import reef.lua.classes : pushLightUds;
+import reef.lua.state;
 
 private extern(C) int udIndexMetamethod(lua_State* L)
 {
@@ -69,29 +70,12 @@ void pushValue(T)(lua_State* L, T value) if(!is(T == struct))
     static assert(false, "Unsupported type being pushed: "~T.stringof~" in stack.d");
 }
 
-@safe void setGlobal(lua_State* L, string name)
-{
-  if(!(L is null) && !(name is null))
-	  (() @trusted => lua_setglobal(L, toStringz(name)))();
-  else
-    throw new StateException("Lua state or name for global to be set were null");
-}
-@safe void getGlobal(lua_State* L, string name)
-{
-  if(!(L is null) && !(name is null))
-    (() @trusted => lua_getglobal(L, toStringz(name)))();
-  else
-    throw new StateException("Lua state or name for global to get were null");
-}
-
 import std.exception;
 unittest
 {
-  assertThrown!StateException(setGlobal(null, "Example"), "setGlobal should have thrown because null passed to arg 0");
-  assertThrown!StateException(getGlobal(null, "Example"), "getGlobal should have thrown because null passed to arg 0");
-  lua_State* L = luaL_newstate();
-  assertThrown!StateException(setGlobal(L, null), "setGlobal should have thrown because null passed to arg1");
-  assertThrown!StateException(getGlobal(L, null), "getGlobal should have thrown because null passed to arg1");
+  import reef.lua.state;
+  auto state = new State();
+  lua_State* L = state.state;
   // Tests push typeof(null)
   pushValue(L, null);
   assert(cast(bool)lua_isnil(L, -1));
@@ -117,11 +101,9 @@ unittest
   assert(lua_type(L, -1) == LUA_TFUNCTION);
   lua_pop(L, 8);
   pushValue(L, "Hola como estas");
-  setGlobal(L, "Greeting");
-  getGlobal(L, "Greeting");
+  state.setGlobal("Greeting");
+  state.getGlobal("Greeting");
   assert(lua_type(L, -1) == LUA_TSTRING);
   assert(fromStringz(lua_tostring(L, 1)) == "Hola como estas");
   lua_pop(L, 1);
-
-  lua_close(L);
 }
