@@ -125,10 +125,14 @@ unittest
   assertThrown!StateException(new State(cast(lua_State*)null), "State object with null lua_State* should have failed");
   assertThrown!StateException(new State(cast(State)null), "State object with null State should have failed");
   auto state = new State();
+  assert(!(state is null), "state should not be null");
   assert(!(state.state is null), "state.state should not be null");
   assertThrown!StateException(state.setGlobal(null), "setGlobal should have thrown because null passed to arg 0");
   assertThrown!StateException(state.getGlobal(null), "getGlobal should have thrown because null passed to arg 0");
   assertNotThrown!StateException(state.getGlobal("barry"), "getGlobal shouldn't have thrown when trying to get non existant global: barry");
   assert(state.isNil(-1), "The top of the stack should have been nil after trying to get non existant global");
+  state.pop(1);
+  state.push("Hola");
+  assert(lua_type(state.state, -1) == LUA_TSTRING);
   state.pop(1);
 }

@@ -66,10 +66,10 @@ unittest
   assert(lua_type(L, -1) == LUA_TNUMBER);
   pushValue(L, "Hola");
   assert(lua_type(L, -1) == LUA_TSTRING);
-  lua_CFunction holaFunction = (lua_State*) { return 0; };
+  lua_CFunction holaFunction = (lua_State* L) {return 0;};
   pushValue(L, holaFunction);
   assert(lua_type(L, -1) == LUA_TFUNCTION);
-  lua_pop(L, 8);
+  state.pop(8);
   pushValue(L, "Hola como estas");
   state.setGlobal("Greeting");
   state.getGlobal("Greeting");
