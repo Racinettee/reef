@@ -1,19 +1,15 @@
 module reef.lua.classes;
 
 import core.memory;
+
+import luad.c.all;
+import reef.lua.attrib;
+import reef.lua.stack;
+import reef.lua.state;
+
 import std.stdio;
 import std.string;
 import std.traits;
-
-import luad.c.all;
-import reef.lua.state;
-import reef.lua.attrib;
-import reef.lua.stack;
-
-template hasCtor(T)
-{
-    enum hasCtor = __traits(compiles, __traits(getOverloads, T.init, "__ctor"));
-}
 
 void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Parameters!Del params)
 {
@@ -255,7 +251,6 @@ class MyClass
 }
 unittest
 {
-  import reef.lua.state;
   State state = new State();
   state.openLibs();
   state.registerClass!MyClass;
