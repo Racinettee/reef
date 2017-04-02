@@ -11,7 +11,69 @@ import std.stdio;
 import std.string;
 import std.traits;
 
-void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Parameters!Del params)
+/**
+ * registerClass - implementation of the state objects class registering feature
+ * takes a class, iterates through its members and adds the annotated ones where applicable
+ * Params:
+ * T = the class to register
+ * state = the Lua state wrapper we're using
+ */
+package void registerClass(T)(State state)
+{
+  static assert(hasUDA!(T, LuaExport));
+
+  lua_CFunction x_gc = (lua_State* L)
+  {
+    GC.removeRoot(lua_touserdata(L, 1));
+    return 0;
+  };
+
+  lua_State* L = state.state;
+
+  // -------------------------------------------------------------------
+  // the top of the stack being the right-most in the following comments
+  // -----------------------------------------------------
+  // Create a metatable named after the D-class and add some constructors and methods
+  // ---------------------------------------------------------------------------------
+  luaL_newmetatable(L, T.stringof); // x = {}
+  lua_pushvalue(L, -1); // x = {}, x = {} 
+  lua_setfield(L, -1, "__index"); // x = {__index = x}
+  lua_pushcfunction(L, &newUserdata!(T)); // x = {__index = x}, x_new
+  lua_setfield(L, -2, "new"); // x = {__index = x, new = x_new}
+  lua_pushcfunction(L, x_gc); // x = {__index = x, new = x_new}, x_gc
+  lua_setfield(L, -2, "__gc"); // x = {__index = x, new = x_new, __gc = x_gc}
+
+  // ---------------------------------
+  pushMethods!(T, 0)(L);
+  lua_setglobal(L, T.stringof);
+}
+/// Push an instance of a registered class onto the stack
+package void pushInstance(T)(lua_State* L, T instance)
+{
+  T* ud = cast(T*)lua_newuserdata(L, (void*).sizeof); // ud
+  *ud = instance;
+  GC.addRoot(ud);
+  lua_newtable(L); // ud, { }
+  lua_pushcfunction(L, &udIndexMetamethod); // ud, { }, cindxmethod
+  lua_setfield(L, -2, "__index"); // ud, { __index=cindxmethod }
+  lua_getglobal(L, T.stringof); // ud, { __index=cindxmethod }, tmetatable
+  if(cast(bool)lua_isnil(L, -1)) // Make sure that the metatable for the class exists
+    luaL_error(L, toStringz("Error: class "~T.stringof~" has not been registered"));
+  lua_setfield(L, -2, "__class"); // ud, { __index=cindxmethod, __class=tmetatable }
+  pushLightUds!(T, 0)(L, *ud); // ud, { }, { __index=cindxmethod, __class=tmetatable, lightuds }
+  lua_setmetatable(L, -2); // ud( ^ )
+}
+/**
+ * fillArgs - take a parameter tuple and fill it in with values from the lua stack
+ * constructors are only matched by the number of arguments they take
+ * Params:
+ * Del = a delegate
+ * index = the index of the argument we're dealing with
+ * forMethod = changes how far the lua argument index offset starts
+ * L = the lua state
+ * params = the parameter tuple
+ */
+private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Parameters!Del params)
 {
   alias ParamList = Parameters!Del;
   const int luaStartingArgIndex = 1; // index 1 is the self, index 2 is our first arugment that we want to deal with
@@ -42,15 +104,24 @@ void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Parameters!
   static if(index+1 < ParamList.length)
     fillArgs!(Del, index+1, forMethod)(L, params);
 }
-
-extern(C) int methodWrapper(Del, Class, uint index)(lua_State* L)
+/**
+ * methodWrapper - the closure by which methods are called
+ * Params:
+ * Del = the method we're handling
+ * Class = the class which the method resides in
+ * index = the derivedMembers index of the class we're on
+ * L = lua state
+ * Returns:
+ * int, as per the lua c function api
+ */
+private extern(C) int methodWrapper(Del, Class, uint index)(lua_State* L)
 {
-  alias ParameterTypeTuple!Del Args;
+  alias Args = ParameterTypeTuple!Del;
 
   static assert ((variadicFunctionStyle!Del != Variadic.d && variadicFunctionStyle!Del != Variadic.c),
 		"Non-typesafe variadic functions are not supported.");
 
-  int top = lua_gettop(L);
+  immutable int top = lua_gettop(L);
 
   static if (variadicFunctionStyle!Del == Variadic.typesafe)
 		enum requiredArgs = Args.length;
@@ -103,14 +174,20 @@ extern(C) int methodWrapper(Del, Class, uint index)(lua_State* L)
   
   assert(0, "Somehow reached a spot in methodWrapper that shouldn't be possible");
 }
-
+/**
+ * extapolateThis - meant to figure out which constructor to call by the number of arguments
+ * being passed by lua
+ * Params:
+ * T = the class
+ * index = the which constructor from derivedMembers we're examining
+ * L = lua State
+ * argc = the number of args
+ * Returns:
+ * instance returned by new T(params)
+ */
 private T extrapolateThis(T, uint index)(lua_State* L, uint argc)
 {
   static assert(hasUDA!(T, LuaExport));
-  //enum thisOverloads = [ __traits(getOverloads, T, "__ctor") ];
-  //alias thisSymbol = thisOverloads[index];
-  //pragma(msg, __traits(getOverloads, T, "__ctor"));
-  pragma(msg, Parameters!(typeof(__traits(getOverloads, T, "__ctor")[index])).stringof);
   static if(
     __traits(getProtection, __traits(getOverloads, T, "__ctor")[index]) == "public" &&
     hasUDA!(__traits(getOverloads, T, "__ctor")[index], LuaExport))
@@ -129,11 +206,10 @@ private T extrapolateThis(T, uint index)(lua_State* L, uint argc)
     return extrapolateThis!(T, index+1)(L, argc);
   assert(false, "We shouldn't end up here");
 }
-
 /// Method used for instantiating userdata
-extern(C) int newUserdata(T)(lua_State* L)
+private extern(C) int newUserdata(T)(lua_State* L)
 {
-  int nargs = lua_gettop(L);
+  immutable int nargs = lua_gettop(L);
   alias thisOverloads = typeof(__traits(getOverloads, T, "__ctor"));
   //pragma(msg, thisOverloads);
 
@@ -141,43 +217,27 @@ extern(C) int newUserdata(T)(lua_State* L)
   return 1;
 }
 /// Method for garbage collecting userdata
-extern(C) int gcUserdata(lua_State* L)
+private extern(C) int gcUserdata(lua_State* L)
 {
   GC.removeRoot(lua_touserdata(L, 1));
   return 0;
-};
-
-void registerClass(T)(State state)
-{
-  static assert(hasUDA!(T, LuaExport));
-
-  lua_CFunction x_gc = (lua_State* L)
-  {
-    GC.removeRoot(lua_touserdata(L, 1));
-    return 0;
-  };
-
-  lua_State* L = state.state;
-
-  // -------------------------------------------------------------------
-  // the top of the stack being the right-most in the following comments
-  // -----------------------------------------------------
-  // Create a metatable named after the D-class and add some constructors and methods
-  // ---------------------------------------------------------------------------------
-  luaL_newmetatable(L, T.stringof); // x = {}
-  lua_pushvalue(L, -1); // x = {}, x = {} 
-  lua_setfield(L, -1, "__index"); // x = {__index = x}
-  lua_pushcfunction(L, &newUserdata!(T)); // x = {__index = x}, x_new
-  lua_setfield(L, -2, "new"); // x = {__index = x, new = x_new}
-  lua_pushcfunction(L, x_gc); // x = {__index = x, new = x_new}, x_gc
-  lua_setfield(L, -2, "__gc"); // x = {__index = x, new = x_new, __gc = x_gc}
-
-  // ---------------------------------
-  pushMethods!(T, 0)(L);
-  lua_setglobal(L, T.stringof);
 }
-
-void pushMethods(T, uint index)(lua_State* L)
+/// User data index methamethod
+private extern(C) int udIndexMetamethod(lua_State* L)
+{
+  lua_getmetatable(L, 1);
+  lua_getfield(L, -1, luaL_checkstring(L, 2));
+  if(cast(bool)lua_isnil(L, -1))
+  {
+    lua_pop(L, 1);
+    lua_getfield(L, -1, "__class");
+    lua_getfield(L, -1, luaL_checkstring(L, 2));
+    lua_remove(L, -2);
+  }
+  return 1;
+}
+/// Iterate through classes methods and add them to class table
+private void pushMethods(T, uint index)(lua_State* L)
 {
   static assert(hasUDA!(T, LuaExport));
   debug {
@@ -201,8 +261,8 @@ void pushMethods(T, uint index)(lua_State* L)
     pushMethods!(T, index+1)(L);
 }
 
-// T refers to a de-referenced instance
-void pushLightUds(T, uint index)(lua_State* L, T instance)
+/// T refers to a de-referenced instance
+private void pushLightUds(T, uint index)(lua_State* L, T instance)
 {
   static assert(hasUDA!(T, LuaExport));
   // This first case handles empty classes
@@ -234,7 +294,7 @@ void pushLightUds(T, uint index)(lua_State* L, T instance)
     pushLightUds!(T, index+1)(L, instance);
 }
 @LuaExport("MyClass")
-class MyClass
+private class MyClass
 {
   @LuaExport("", MethodType.ctor)
   public this(string name)
@@ -249,6 +309,7 @@ class MyClass
     return myname;
   }
 }
+public:
 unittest
 {
   State state = new State();

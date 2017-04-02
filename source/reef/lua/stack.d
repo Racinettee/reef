@@ -8,38 +8,8 @@ import std.stdio;
 import core.memory;
 
 import reef.lua.exception;
-import reef.lua.classes : pushLightUds;
+import reef.lua.classes : pushInstance;
 import reef.lua.state;
-
-private extern(C) int udIndexMetamethod(lua_State* L)
-{
-  lua_getmetatable(L, 1);
-  lua_getfield(L, -1, luaL_checkstring(L, 2));
-  if(cast(bool)lua_isnil(L, -1))
-  {
-    lua_pop(L, 1);
-    lua_getfield(L, -1, "__class");
-    lua_getfield(L, -1, luaL_checkstring(L, 2));
-    lua_remove(L, -2);
-  }
-  return 1;
-}
-
-void pushInstance(T)(lua_State* L, T instance)
-{
-  T* ud = cast(T*)lua_newuserdata(L, (void*).sizeof); // ud
-  *ud = instance;
-  GC.addRoot(ud);
-  lua_newtable(L); // ud, { }
-  lua_pushcfunction(L, &udIndexMetamethod); // ud, { }, cindxmethod
-  lua_setfield(L, -2, "__index"); // ud, { __index=cindxmethod }
-  lua_getglobal(L, T.stringof); // ud, { __index=cindxmethod }, tmetatable
-  if(cast(bool)lua_isnil(L, -1)) // Make sure that the metatable for the class exists
-    luaL_error(L, toStringz("Error: class "~T.stringof~" has not been registered"));
-  lua_setfield(L, -2, "__class"); // ud, { __index=cindxmethod, __class=tmetatable }
-  pushLightUds!(T, 0)(L, *ud); // ud, { }, { __index=cindxmethod, __class=tmetatable, lightuds }
-  lua_setmetatable(L, -2); // ud( ^ )
-}
 
 void pushValue(T)(lua_State* L, T value) if(!is(T == struct))
 {
