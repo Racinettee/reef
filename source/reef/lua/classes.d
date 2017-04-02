@@ -263,22 +263,17 @@ unittest
   lua_State* L = state.state;
   assert(cast(bool)lua_isnil(L, -1) == false);
   assert(lua_type(L, -1) == LUA_TTABLE);
-  state.push("jean");
-  lua_getfield(L, -2, "new");
+  lua_getfield(L, -1, "new");
   assert(lua_type(L, -1) == LUA_TFUNCTION);
-  //assert(lua_pcall(L, 1, 1, 0) == 0);
-  if(lua_pcall(L, 1, 1, 0) != 0) {
-    //lua_error(L);
-    writeln(fromStringz(lua_tostring(L, -1)));
-    assert(false);
-  }
+  state.push("jean");
+  assert(lua_pcall(L, 1, 1, 0) == 0, fromStringz(lua_tostring(L, -1)));
   assert(lua_type(L, -1) == LUA_TUSERDATA);
   lua_getfield(L, -1, "getName");
   assert(cast(bool)lua_isnil(L, -1) == false);
+  assert(lua_type(L, -1) == LUA_TFUNCTION);
+  lua_insert(L, -2); // Swap getName to be below the userdata object
   assert(lua_pcall(L, 1, 1, 0) == 0);
-  assert(luaL_checkstring(L, -1) == "jean");
-
-  lua_pop(L, 2);
+  assert(fromStringz(luaL_checkstring(L, -1)) == "jean");
+  lua_pop(L, 1);
   state.doString("assert(MyClass.new('bill'):getName() == 'bill')");
-  //assert(fromStringz(luaL_checkstring(L, -1)) == "bill");
 }
