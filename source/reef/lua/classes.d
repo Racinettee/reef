@@ -83,22 +83,18 @@ private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Par
   //  const int luaOffsetArg = index+luaStartingArgIndex;
   static if(is(typeof(params[index]) == int))
   {
-    pragma(msg, "Generating int parameter");
     params[index] = luaL_checkint(L, luaOffsetArg);
   }
   else static if(is(typeof(params[index]) == string))
   {
-    pragma(msg, "Generating string parameter");
     params[index] = cast(string)fromStringz(luaL_checkstring(L, luaOffsetArg));
   }
   else static if(is(typeof(params[index]) == float) || is(typeof(params[index]) == double))
   {
-    pragma(msg, "Generating float parameter");
     params[index] = luaL_checknumber(L, luaOffsetArg);
   }
   else static if(is(typeof(params[index]) == bool))
   {
-    pragma(msg, "Generating bool parameter");
     params[index] = cast(bool)luaL_checkboolean(L, luaOffsetArg);
   }
   static if(index+1 < ParamList.length)
@@ -141,7 +137,6 @@ private extern(C) int methodWrapper(Del, Class, uint index)(lua_State* L)
   func.funcptr = cast(typeof(func.funcptr))lua_touserdata(L, lua_upvalueindex(1));
 
   Parameters!Del typeObj;
-  pragma(msg, Parameters!Del);
   fillArgs!(Del, 0, true)(L, typeObj);
 
   static if(hasUDA!(mixin("Class."~__traits(derivedMembers, Class)[index]), LuaExport))
@@ -211,7 +206,6 @@ private extern(C) int newUserdata(T)(lua_State* L)
 {
   immutable int nargs = lua_gettop(L);
   alias thisOverloads = typeof(__traits(getOverloads, T, "__ctor"));
-  //pragma(msg, thisOverloads);
 
   pushInstance!T(L, extrapolateThis!(T, 0)(L, nargs)); //new T());
   return 1;
@@ -240,9 +234,6 @@ private extern(C) int udIndexMetamethod(lua_State* L)
 private void pushMethods(T, uint index)(lua_State* L)
 {
   static assert(hasUDA!(T, LuaExport));
-  debug {
-    pragma(msg, __traits(derivedMembers, T)[index]);
-  }
   static if(__traits(derivedMembers, T)[index] != "this" &&
     __traits(getProtection, mixin("T."~__traits(derivedMembers, T)[index])) == "public" &&
     hasUDA!(mixin("T."~__traits(derivedMembers, T)[index]), LuaExport)) 
@@ -265,10 +256,6 @@ private void pushMethods(T, uint index)(lua_State* L)
 private void pushLightUds(T, uint index)(lua_State* L, T instance)
 {
   static assert(hasUDA!(T, LuaExport));
-  // This first case handles empty classes
-  debug {
-    pragma(msg, __traits(derivedMembers, T)[index]);
-  }
   static if(__traits(derivedMembers, T).length > 1 &&
     __traits(derivedMembers, T)[index] != "this" &&
     __traits(getProtection, mixin("T."~__traits(derivedMembers, T)[index])) == "public" &&
