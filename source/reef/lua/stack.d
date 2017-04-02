@@ -1,17 +1,18 @@
 module reef.lua.stack;
 
-import luad.c.all;
-
-import std.traits;
-import std.string;
-import std.stdio;
 import core.memory;
 
-import reef.lua.exception;
+import luad.c.all;
+
 import reef.lua.classes : pushInstance;
+import reef.lua.exception;
 import reef.lua.state;
 
-void pushValue(T)(lua_State* L, T value) if(!is(T == struct))
+import std.stdio;
+import std.string;
+import std.traits;
+
+package void pushValue(T)(lua_State* L, T value) if(!is(T == struct))
 {
   static if(is(T == typeof(null)))
     lua_pushnil(L);
@@ -40,17 +41,16 @@ void pushValue(T)(lua_State* L, T value) if(!is(T == struct))
     static assert(false, "Unsupported type being pushed: "~T.stringof~" in stack.d");
 }
 
-import std.exception;
 unittest
 {
-  import reef.lua.state;
+  import reef.lua.attrib : LuaExport;
+  import reef.lua.state : State;
   auto state = new State();
   lua_State* L = state.state;
   // Tests push typeof(null)
   pushValue(L, null);
   assert(cast(bool)lua_isnil(L, -1));
   // Tests value is null
-  import reef.lua.attrib;
   @LuaExport("ExampleClass")
   class ExampleClass { }
   ExampleClass nullExample;
