@@ -6,7 +6,8 @@ Reef is a Lua binding in D designed to expose classes using user defined attribu
 
 ### Usage
 In D land
-```@LuaExport("MyClass")
+```D
+@LuaExport("MyClass")
 class MyClass
 {
   @LuaExport("", MethodType.ctor)
@@ -25,6 +26,11 @@ class MyClass
 // ...
 State state = new State();
 state.openLibs();
-state.registerClass!MyClass;```
+state.registerClass!MyClass;
+```
+
 And in Lua
-```assert(MyClass.new('bill'):getName() == 'bill')```
+
+```Lua
+assert(MyClass.new('bill'):getName() == 'bill')
+```
