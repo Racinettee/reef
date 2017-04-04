@@ -34,3 +34,47 @@ And in Lua
 ```Lua
 assert(MyClass.new('bill'):getName() == 'bill')
 ```
+
+### Example continued
+Say you're using LGI and GtkD in conjunction and you'd like to expose an instance of your widget to LGI. LGI expects widgets from
+C to be passed as lightuserdata.
+
+In D:
+```D
+@LuaExport("AppWindow")
+class AppWindow : MainWindow
+{
+  @LuaExport("", MethodType.ctor)
+  public this()
+  {
+    super("Example App Window");
+    setSizeRequest(600, 400);
+
+    builder = new Builder();
+    if(!builder.addFromFile("interface/mainmenu.glade"))
+			writeln("Could not load gladefile");
+
+    mainMenu = cast(T)b.getObject(n);
+    // ...
+    // Hook events to the menu items
+    // ...
+    showAll;
+  }
+  @LuaExport("menubar", MethodType.none, "getMenuBarStruct()", RetType.none, MemberType.lightud)
+  MenuBar mainMenu;
+}
+// ....
+state.registerClass!AppWindow;
+```
+
+In Lua:
+
+```Lua
+local mainWindow = AppWindow.new()
+
+local menuBar = Gtk.MenuBar(mainWindow.menubar)
+menuBar:append(Gtk.MenuItem {
+  label = 'Hello'
+})
+menuBar:show_all()
+```
