@@ -54,7 +54,7 @@ class AppWindow : MainWindow
     if(!builder.addFromFile("interface/mainmenu.glade"))
 			writeln("Could not load gladefile");
 
-    mainMenu = cast(T)b.getObject(n);
+    mainMenu = cast(T)builder.getObject("mainMenu");
     // ...
     // Hook events to the menu items
     // ...
