@@ -97,6 +97,11 @@ private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Par
   {
     params[index] = cast(bool)luaL_checkboolean(L, luaOffsetArg);
   }
+  else static if(is(typeof(params[index]) == class))
+  {
+    // if lua_type == userdata, dereference, cast to reference type
+    // if light user data, extrapolateThis - see if a constructor takes light user data
+  }
   static if(index+1 < ParamList.length)
     fillArgs!(Del, index+1, forMethod)(L, params);
 }
