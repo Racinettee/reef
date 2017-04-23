@@ -97,6 +97,24 @@ private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Par
   {
     params[index] = cast(bool)luaL_checkboolean(L, luaOffsetArg);
   }
+  else static if(is(typeof(params[index]) == class)) {
+    // We have to try two things:
+    // 1) check with lua to see if the name of T.stringof exists as a metatable
+    if(cast(bool)lua_isuserdata(L, luaOffsetArg)) {
+      lua_getglobal(L, typeof(params[index]).stringof);
+      if(!lua_isnil(L)) {
+        lua_pop(L, 1);
+        params[index] = lua_touserdata(L, luaOffsetArg);
+      }
+    }
+    else if(cast(bool)lua_islightuserdata(L, luaOffsetArg)) {
+      
+    }
+    else {
+      luaL_error(L, "Expected a user data/D class instance or light userdata");
+      throw new Exception("Lua argument exception");
+    }
+  }
   static if(index+1 < ParamList.length)
     fillArgs!(Del, index+1, forMethod)(L, params);
 }
