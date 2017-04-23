@@ -53,6 +53,30 @@ class State
     if((() @trusted => luaL_dostring(state, toStringz(line)))() != 0)
       printError(this);
   }
+  /**
+   * This function does not add a suffix - it is left to the user
+   * this way the user can add .lua or .moon suffix to their path
+   */
+  @safe void addPath(string path)
+  {
+    doString("package.path = package.path .. ';' .. '"~path~"'");
+  }
+  /**
+   * On windows this functions adds the dll suffix to your path. On linux/mac it will at so
+   */
+  @safe void addCPath(string path)
+  {
+    version(Windows) {
+      doString("package.cpath = package.cpath .. ';"~path~"/?.dll'");
+    }
+    version(MinGW) {
+      doString("package.cpath = package.cpath .. ';"~path~"/?.dll'");
+    }
+    // linux/mac
+    else {
+      doString("package.cpath = package.cpath .. ';"~path~"/?.so'");
+    }
+  }
   @safe void openLibs()
   {
     (() @trusted => luaL_openlibs(state))();

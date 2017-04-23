@@ -102,9 +102,9 @@ private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Par
     // 1) check with lua to see if the name of T.stringof exists as a metatable
     if(cast(bool)lua_isuserdata(L, luaOffsetArg)) {
       lua_getglobal(L, typeof(params[index]).stringof);
-      if(!lua_isnil(L)) {
+      if(!lua_isnil(L, -1)) {
         lua_pop(L, 1);
-        params[index] = lua_touserdata(L, luaOffsetArg);
+        params[index] = cast(typeof(params[index]))lua_touserdata(L, luaOffsetArg);
       }
     }
     else if(cast(bool)lua_islightuserdata(L, luaOffsetArg)) {
