@@ -108,10 +108,13 @@ private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Par
       }
     }
     else if(cast(bool)lua_islightuserdata(L, luaOffsetArg)) {
-      
+      params[index] = cast(typeof(params[index]))lua_topointer(L, luaOffsetArg);
+    }
+    else if(lua_isnil(L, luaOffsetArg)) {
+      params[index] = null;
     }
     else {
-      luaL_error(L, "Expected a user data/D class instance or light userdata");
+      luaL_error(L, "Expected a user data/D class instance or light userdata or nil");
       throw new Exception("Lua argument exception");
     }
   }
