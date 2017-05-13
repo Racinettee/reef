@@ -157,6 +157,6 @@ unittest
   assert(state.isNil(-1), "The top of the stack should have been nil after trying to get non existant global");
   state.pop(1);
   state.push("Hola");
-  assert(lua_type(state.state, -1) == LUA_TSTRING);
+  assert(lua_type(state.state, -1) == LUA_TSTRING, "Lua type should have been a string");
   state.pop(1);
 }
