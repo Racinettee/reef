@@ -117,7 +117,7 @@ class State
     return (() @trusted => cast(bool)lua_isnil(state, index))();
   }
   @property
-  @safe lua_State* state()
+  @safe @nogc lua_State* state()
   {
     return luastate;
   }
