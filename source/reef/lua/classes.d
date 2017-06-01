@@ -101,8 +101,6 @@ private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Par
     }
     else static if(isPointer!(typeof(params[index]))) {
       params[index] = cast(typeof(params[index]))lua_topointer(L, luaOffsetArg);
-      pragma(msg, "isPointer parameter!");
-
     }
     else static if(is(typeof(params[index]) == class)) {
       // We have to try two things:
