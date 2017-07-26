@@ -53,6 +53,30 @@ class State
     if((() @trusted => luaL_dostring(state, toStringz(line)))() != 0)
       printError(this);
   }
+  /**
+   * This function does not add a suffix - it is left to the user
+   * this way the user can add .lua or .moon suffix to their path
+   */
+  @safe void addPath(string path)
+  {
+    doString("package.path = package.path .. ';' .. '"~path~"'");
+  }
+  /**
+   * On windows this functions adds the dll suffix to your path. On linux/mac it will at so
+   */
+  @safe void addCPath(string path)
+  {
+    version(Windows) {
+      doString("package.cpath = package.cpath .. ';"~path~"/?.dll'");
+    }
+    version(MinGW) {
+      doString("package.cpath = package.cpath .. ';"~path~"/?.dll'");
+    }
+    // linux/mac
+    else {
+      doString("package.cpath = package.cpath .. ';"~path~"/?.so'");
+    }
+  }
   @safe void openLibs()
   {
     (() @trusted => luaL_openlibs(state))();
@@ -93,7 +117,7 @@ class State
     return (() @trusted => cast(bool)lua_isnil(state, index))();
   }
   @property
-  @safe lua_State* state()
+  @safe @nogc lua_State* state() nothrow
   {
     return luastate;
   }
@@ -133,6 +157,6 @@ unittest
   assert(state.isNil(-1), "The top of the stack should have been nil after trying to get non existant global");
   state.pop(1);
   state.push("Hola");
-  assert(lua_type(state.state, -1) == LUA_TSTRING);
+  assert(lua_type(state.state, -1) == LUA_TSTRING, "Lua type should have been a string");
   state.pop(1);
 }

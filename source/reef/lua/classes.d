@@ -76,29 +76,56 @@ package void pushInstance(T)(lua_State* L, T instance)
 private void fillArgs(Del, int index, bool forMethod=true)(lua_State* L, ref Parameters!Del params)
 {
   alias ParamList = Parameters!Del;
-  const int luaStartingArgIndex = 1; // index 1 is the self, index 2 is our first arugment that we want to deal with
-  //static if(forMethod)
-  int luaOffsetArg = index+luaStartingArgIndex+(forMethod ? 1 : 0);
-  //else
-  //  const int luaOffsetArg = index+luaStartingArgIndex;
-  static if(is(typeof(params[index]) == int))
+  static if(ParamList.length > 0)
   {
-    params[index] = luaL_checkint(L, luaOffsetArg);
+    const int luaStartingArgIndex = 1; // index 1 is the self, index 2 is our first arugment that we want to deal with
+    //static if(forMethod)
+    int luaOffsetArg = index+luaStartingArgIndex+(forMethod ? 1 : 0);
+    //else
+    //  const int luaOffsetArg = index+luaStartingArgIndex;
+    static if(is(typeof(params[index]) == int))
+    {
+      params[index] = luaL_checkint(L, luaOffsetArg);
+    }
+    else static if(is(typeof(params[index]) == string))
+    {
+      params[index] = cast(string)fromStringz(luaL_checkstring(L, luaOffsetArg));
+    }
+    else static if(is(typeof(params[index]) == float) || is(typeof(params[index]) == double))
+    {
+      params[index] = luaL_checknumber(L, luaOffsetArg);
+    }
+    else static if(is(typeof(params[index]) == bool))
+    {
+      params[index] = cast(bool)luaL_checkboolean(L, luaOffsetArg);
+    }
+    else static if(isPointer!(typeof(params[index]))) {
+      params[index] = cast(typeof(params[index]))lua_topointer(L, luaOffsetArg);
+    }
+    else static if(is(typeof(params[index]) == class)) {
+      // We have to try two things:
+      // 1) check with lua to see if the name of T.stringof exists as a metatable
+      if(cast(bool)lua_isuserdata(L, luaOffsetArg)) {
+        lua_getglobal(L, typeof(params[index]).stringof);
+        if(!lua_isnil(L, -1)) {
+          lua_pop(L, 1);
+          params[index] = cast(typeof(params[index]))lua_touserdata(L, luaOffsetArg);
+        }
+      }
+      else if(cast(bool)lua_islightuserdata(L, luaOffsetArg)) {
+        params[index] = cast(typeof(params[index]))lua_topointer(L, luaOffsetArg);
+      }
+      else if(lua_isnil(L, luaOffsetArg)) {
+        params[index] = null;
+      }
+      else {
+        luaL_error(L, "Expected a user data/D class instance or light userdata or nil");
+        throw new Exception("Lua argument exception");
+      }
+    }
+    static if(index+1 < ParamList.length)
+      fillArgs!(Del, index+1, forMethod)(L, params);
   }
-  else static if(is(typeof(params[index]) == string))
-  {
-    params[index] = cast(string)fromStringz(luaL_checkstring(L, luaOffsetArg));
-  }
-  else static if(is(typeof(params[index]) == float) || is(typeof(params[index]) == double))
-  {
-    params[index] = luaL_checknumber(L, luaOffsetArg);
-  }
-  else static if(is(typeof(params[index]) == bool))
-  {
-    params[index] = cast(bool)luaL_checkboolean(L, luaOffsetArg);
-  }
-  static if(index+1 < ParamList.length)
-    fillArgs!(Del, index+1, forMethod)(L, params);
 }
 /**
  * methodWrapper - the closure by which methods are called
